@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 亮度太阳 + 上升曲线，居中在 108x108 安全区内 -->
+    <path
+        android:fillColor="#FFC2410C"
+        android:pathData="M54,32m-9,0a9,9 0,1 1,18 0a9,9 0,1 1,-18 0" />
+    <path
+        android:strokeColor="#FFC2410C"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:pathData="M54,16v6 M54,42v6 M40,32h6 M62,32h6 M44,22l4,4 M60,38l4,4 M64,22l-4,4 M48,38l-4,4" />
+    <path
+        android:strokeColor="#FF1D6F42"
+        android:strokeWidth="6"
+        android:strokeLineCap="round"
+        android:pathData="M26,78 C40,78 44,58 58,58 C70,58 74,66 82,66" />
+</vector>

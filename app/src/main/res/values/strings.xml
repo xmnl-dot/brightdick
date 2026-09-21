@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  这里只放「被 AndroidManifest / LSPosed 按名字读取」的资源。
+  界面文案全部写在 Kotlin 里（HyperCurveScreen.kt），不再往这里塞没人引用的 string，
+  避免出现「改了 XML 却没生效」的假象。
+-->
+<resources>
+    <string name="app_name">亮度曲线</string>
+    <string name="xposed_description">HyperOS 状态栏亮度条曲线重映射（SystemUI 滑条换算 + system_server）</string>
+
+    <string-array name="xposed_scope">
+        <item>system</item>
+        <item>com.android.systemui</item>
+    </string-array>
+</resources>

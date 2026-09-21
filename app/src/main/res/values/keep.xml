@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  资源收缩（isShrinkResources）保险：下面这些只被 LSPosed 框架在运行时按名字读取，
+  我们的代码里没有任何 R.xxx 引用，理论上会被 shrinker 判为未使用。
+  （它们同时被 AndroidManifest 引用，正常不会被裁，这里显式声明避免以后改清单时踩坑。）
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@array/xposed_scope,@string/xposed_description,@string/app_name" />

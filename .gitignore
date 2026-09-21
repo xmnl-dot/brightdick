@@ -1,0 +1,33 @@
+# ===== Android / Gradle 构建产物 =====
+*.iml
+.gradle/
+.kotlin/
+build/
+app/build/
+app/release/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+
+# Gradle 自动生成的 daemon 工具链固定文件（写死了本机工具链与下载源）
+gradle/gradle-daemon-jvm.properties
+
+# ===== 本地开发笔记：不推送 =====
+# DEVNOTES.md 记的是本机调试过程（设备型号、本地路径、实测数据），只留在本地。
+# 仓库里的 README.md 是公开说明。
+DEVNOTES.md
+
+# ===== IDE =====
+.idea/
+*.hprof
+
+# ===== 本机私有配置（sdk.dir 等，因人而异）=====
+local.properties
+
+# ===== 签名密钥：绝不入库 =====
+# 仓库里不放 keystore，自己构建时把 mykey.jks 放到 app/ 下即可
+*.jks
+*.keystore
+*.pepk
