@@ -23,7 +23,7 @@ object HookRuntime {
     @Volatile
     var classLoader: ClassLoader? = null
 
-    /** 面板背光满量程，挂载时从 sysfs 实测读取。 */
+    /** 面板背光满量程，挂载时从 sysfs 读取。 */
     @Volatile
     var maxCode: Float = Config.MAX_CODE
 
@@ -33,10 +33,10 @@ object HookRuntime {
     /**
      * 找一个能看见目标类的 ClassLoader。
      *
-     * 为什么需要「找」而不是直接用一个：MIUI 的类（DisplayPowerControllerImpl 等）住在
-     * system_ext/framework/miui-services.jar，只有 system_server 自己的 ClassLoader 能加载它们。
-     * 开机时这个 loader 由 SystemServerStartingParam 直接给（SystemUI 进程则由 PackageReadyParam 给）；
-     * 万一为空，就按下面的候选链逐个试探，谁成功就把它记住。
+     * MIUI 的类（DisplayPowerControllerImpl 等）在 system_ext/framework/miui-services.jar 里，
+     * 只有 system_server 自己的 ClassLoader 能加载。优先用已记住的 loader（开机时由
+     * SystemServerStartingParam / PackageReadyParam 提供），为空则按候选链逐个试探，
+     * 谁成功就把它记住。
      */
     fun loadTargetClass(name: String): Class<*>? {
         for (loader in candidateLoaders()) {
@@ -65,8 +65,8 @@ object HookRuntime {
         }
         Thread.currentThread().contextClassLoader?.let { out += it }
         runCatching { ClassLoader.getSystemClassLoader() }.getOrNull()?.let { out += it }
-        // 应用进程（如 SystemUI）：当前 Application 的 ClassLoader 最可靠。
-        // ActivityThread 是 @hide（不在公开 android.jar 里），只能用字符串反射拿。
+        // 应用进程（如 SystemUI）用当前 Application 的 ClassLoader。
+        // ActivityThread 是 @hide（不在公开 android.jar 里），只能字符串反射。
         runCatching {
             val activityThread = Class.forName("android.app.ActivityThread")
             val application = activityThread.getMethod("currentApplication").invoke(null)
@@ -129,8 +129,7 @@ object HookRuntime {
     const val ERROR = Log.ERROR
 
     /**
-     * 模块日志：除了交给框架（写到 /data/adb/lspd/log/），同步打一份到 logcat，
-     * 这样 `adb logcat -s HyperCurve` 就能直接看，不用去翻框架日志文件。
+     * 模块日志：一份交给框架（写入 /data/adb/lspd/log/），一份同步打 logcat（`adb logcat -s HyperCurve`）。
      */
     fun log(priority: Int, message: String, throwable: Throwable? = null) {
         val ref = api
@@ -147,20 +146,13 @@ object HookRuntime {
     }
 
     /**
-     * 只有真要打日志时才会执行 [message] 构造字符串。
-     *
-     * 为什么用 lambda：钩子挂在拖滑条这种每帧都调的方法上，如果直接拼好字符串再传进来，
-     * 即使被节流丢弃也已经产生了一堆临时 String（GC 压力）。改成内联 lambda 后，
-     * 被丢弃的那 99% 调用零分配。
+     * 详细日志（受「详细日志」开关控制）：内联 lambda 只在真要打时才构造字符串，被丢弃时零分配。
      */
     inline fun verbose(message: () -> String) {
         if (config.verbose) log(DEBUG, message())
     }
 
-    /**
-     * 「钩子真的被调用」的节流日志：拖滑条时每帧都会命中，全打会刷爆日志，
-     * 所以最多每 [HIT_INTERVAL_MS] 打一条，但仍然保证能看见。
-     */
+    /** 上次命中日志的时间戳（节流用）。 */
     @PublishedApi
     @Volatile
     internal var lastHitAt = 0L
@@ -168,7 +160,11 @@ object HookRuntime {
     @PublishedApi
     internal const val HIT_INTERVAL_MS = 400L
 
+    /**
+     * 命中日志（受「详细日志」开关控制）：最多每 [HIT_INTERVAL_MS] 一条。
+     */
     inline fun hit(message: () -> String) {
+        if (!config.verbose) return
         val now = SystemClock.uptimeMillis()
         if (now - lastHitAt < HIT_INTERVAL_MS) return
         lastHitAt = now
@@ -217,11 +213,8 @@ object HookRuntime {
 }
 
 /**
- * 统一的挂载入口。
- *
- * 必须用显式 `object : Hooker`，不能写 `intercept { ... }`：后者是 Java SAM 转换，Kotlin 2.x
- * 编成 invokedynamic，合成类名不受 `-keep class ...hook.** { *; }` 稳定约束，R8 一旦重命名
- * `intercept`，宿主侧（按接口方法名调用）就会 AbstractMethodError。
+ * 挂载钩子的统一入口：用显式 `object : XposedInterface.Hooker`，避免 `intercept { }` 的 SAM 转换
+ * 生成 invokedynamic 合成类（类名不受 keep 约束，混淆后按接口方法名调用会失败）。
  */
 fun XposedInterface.HookBuilder.hookerWith(
     id: String,

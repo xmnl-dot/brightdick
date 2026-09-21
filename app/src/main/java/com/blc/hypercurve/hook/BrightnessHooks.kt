@@ -8,23 +8,13 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.concurrent.Volatile
 
 /**
- * system_server 侧的钩子：只做一件事 —— 抬高手动最大上限。
+ * system_server 侧的钩子：抬高手动最大上限。
  *
- * 本机（myron / HyperOS 4.0.0.30）实测：滑条→背光的换算整个发生在 SystemUI（见 [SystemUiHooks]），
- * MIUI 的 refactor 亮度链路在 system_server 里一次都不会被调用：
+ * 两个挂载点都是 DisplayPowerControllerImpl 上的天花板函数，返回值由 binder 报给 SystemUI
+ * 作为滑条上限（阳光模式也读它们）：
  *
- * ```
- * RefactorBrightnessUtil.sliderToLogicalBrightness / RefactorNitController.getCurrentNit /
- * DisplayPowerControllerImpl.getRefactorBrightness   → 实测命中 0 次
- * ```
- *
- * 所以那三个钩子、以及只服务它们的环境光因子/节点常量反射，全部删掉了。
- * 留下的两个（同一类里的天花板函数，binder 报给 SystemUI 当滑条上限，阳光模式也读它）：
- *
- * - `DisplayPowerControllerImpl.getMaxManualBrightness(float nit)`：手动最大背光
- *   （普通档 0.3165 ≈ 5185 码值，随环境光档位变）；
- * - `DisplayPowerControllerImpl.getMaxManualBrightnessBoost()`：阳光模式/boost 上限
- *   （= `config_max_manual_brt_boost` 0.411977 = 800 nit = 6750 码值）。
+ * - `getMaxManualBrightness(float nit)`：普通手动最大背光（随环境光档位变）；
+ * - `getMaxManualBrightnessBoost()`：阳光模式/boost 上限（= `config_max_manual_brt_boost`，800 nit）。
  */
 object BrightnessHooks {
 

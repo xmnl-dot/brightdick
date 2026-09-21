@@ -7,7 +7,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
-/** Material 3 主题；Android 12+ 用动态取色（本机 minSdk 35，恒成立）。 */
+/** Material 3 主题；Android 12+ 用动态取色（minSdk 35，恒成立）。 */
 @Composable
 fun HyperCurveTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),

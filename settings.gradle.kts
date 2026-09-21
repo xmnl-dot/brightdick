@@ -6,7 +6,7 @@ pluginManagement {
     }
     plugins {
         id("com.android.application") version "9.2.1"
-        // KGP 2.2.x 不认识 AGP 9 的新扩展类型（会报 BaseExtension ClassCastException），必须 2.4.x
+        // KGP 与 Compose 编译器插件同版本（2.4.x，与 AGP 9 匹配）
         id("org.jetbrains.kotlin.android") version "2.4.10"
         id("org.jetbrains.kotlin.plugin.compose") version "2.4.10"
     }

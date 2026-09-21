@@ -8,29 +8,22 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.concurrent.Volatile
 
 /**
- * SystemUI 侧的钩子（作用域 `com.android.systemui`）。
- *
- * 为什么必须在这里改：本机（myron / HyperOS 4.0.0.30）实测，状态栏亮度条走的是 AOSP 这条路，
- * 不是 MIUI 的 refactor 链路（system_server 里 `setTemporarySliderValue` / `sliderToLogicalBrightness`
- * 一次都没被调用，logcat 里只有 `DisplayManagerService.setTemporaryBrightness`）：
+ * SystemUI 侧的钩子（作用域 `com.android.systemui`）：把「滑条刻度 → 背光浮点」的换算换成自定义曲线。
  *
  * ```
- * MiuiBrightnessController.onChanged(slider, isUserSliding, ..., gammaValue, ...)
- *   → float backlight = min(BrightnessUtils.convertGammaToLinearFloat(gammaValue, mMinimumBacklight, mMaximumBacklight), 1f)
- *   → 交给后台线程 → DisplayManager.setTemporaryBrightness/setBrightness(displayId, backlight)
+ * MiuiBrightnessController.onChanged(...)
+ *   → BrightnessUtils.convertGammaToLinearFloat(gamma, min, max)
+ *   → 后台线程 → DisplayManager.setTemporaryBrightness / setBrightness(displayId, backlight)
  * ```
- *
- * 也就是说「滑条刻度 → 背光浮点」的换算整个发生在 SystemUI，system_server 只是照抄这个浮点
- * （0.41197655 就是 800nit / 6750 码值，与 sysfs 是 1:1 关系）。因此曲线要在这里改：
  *
  * 1. 正向 [HOOK_G2L]：`convertGammaToLinearFloat(int gamma, float min, float max)`
  *    gamma → 百分比 → 折线取目标码值 → 浮点（码值 / 满量程）。
  * 2. 反向 [HOOK_L2G]：`convertLinearToGammaFloat(float brightness, float min, float max)`
- *    浮点 → 码值 → 百分比 → gamma。必须和正向互逆，否则系统回读亮度时滑条会被拽到别的位置。
+ *    浮点 → 码值 → 百分比 → gamma；与正向互逆，系统回读时滑条位置才不会跳。
  *
  * 两种模式：
  * - MODE_EXACT：忽略 min/max，直接返回 码值/满量程 —— 滑条位置严格等于目标码值。
- * - MODE_CURVE：返回 `min + (max - min) * 码值/满量程`，把系统的上下限（阳光模式、热控）保留下来。
+ * - MODE_CURVE：返回 `min + (max - min) * 码值/满量程`，保留系统上下限（阳光模式、热控）。
  */
 object SystemUiHooks {
 
@@ -40,18 +33,13 @@ object SystemUiHooks {
 
     private val handles = ConcurrentHashMap<String, HookHandle>()
 
-    /** 挂载时只存 Class 引用，**不读任何静态字段**（见 [gammaMax] 的注释）。 */
+    /** 挂载时只存 Class 引用，不读任何静态字段（见 [gammaMax]）。 */
     @Volatile
     private var utilsClass: Class<*>? = null
 
     /**
-     * 滑条 gamma 空间满量程（`BrightnessUtils.GAMMA_SPACE_MAX`），首次使用时懒读。
-     *
-     * 为什么不能像常规做法那样在 install() 里反射读：那个静态字段会触发 `BrightnessUtils.<clinit>`，
-     * 而它的静态块第一行是 `ActivityThread.currentApplication().getResources()`——在 onPackageReady
-     * 阶段应用还没创建，`currentApplication()` 为 null → clinit 抛 NPE → 这个类被标记为初始化失败，
-     * 之后 SystemUI 每次碰它（例如下拉进控制中心）都 NoClassDefFoundError 崩溃，形成崩溃循环。
-     * 改成钩子被调用时再读：那时类必然已初始化完成，读字段是安全的。
+     * 滑条 gamma 空间满量程（`BrightnessUtils.GAMMA_SPACE_MAX`），首次使用时懒读：
+     * 在 install() 阶段读会提前触发该类的 `<clinit>`（其静态块依赖已创建的 Application）。
      */
     @Volatile
     private var gammaSpaceMax = 0
@@ -78,7 +66,7 @@ object SystemUiHooks {
             HookRuntime.log(HookRuntime.WARN, "SystemUI 里没找到 BrightnessUtils，放弃挂载")
             return 0
         }
-        // 只存引用；不碰 GAMMA_SPACE_MAX（会提前触发 clinit，见 gammaMax 注释）
+        // 只存引用；GAMMA_SPACE_MAX 留到 gammaMax() 里懒读
         utilsClass = clazz
 
         var count = 0
@@ -106,7 +94,7 @@ object SystemUiHooks {
     private fun percentOf(gamma: Int): Float =
         (gamma.toFloat() / gammaMax() * 100f).coerceIn(0f, 100f)
 
-    /** 目标码值 -> 要交给框架的背光浮点。[exact] 由调用方从同一次配置快照传入，避免同一次换算里混用两份快照。 */
+    /** 目标码值 -> 交给框架的背光浮点；[exact] 为 true 时忽略 min/max，直接返回码值比例。 */
     private fun backlightOf(targetCode: Float, min: Float, max: Float, exact: Boolean): Float {
         val fraction = (targetCode / HookRuntime.maxCode).coerceIn(0f, 1f)
         return if (exact) fraction else min + (max - min) * fraction
@@ -125,10 +113,7 @@ object SystemUiHooks {
     // ---------------- 钩子实现 ----------------
 
     /**
-     * 正向：滑条 gamma → 背光浮点。
-     *
-     * 性能注意：只在“需要让原逻辑跑”时才调 `chain.proceed()`。能用我们的曲线给出结果时
-     * 直接返回，省掉原方法的那次计算（拖滑条时每帧都会调进来）。
+     * 正向：滑条 gamma → 背光浮点。能用曲线给出结果时直接返回，不再调用原方法。
      */
     private fun gammaToLinear(chain: XposedInterface.Chain): Any? {
         HookRuntime.refresh()

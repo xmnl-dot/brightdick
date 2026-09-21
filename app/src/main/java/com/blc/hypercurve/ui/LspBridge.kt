@@ -11,8 +11,7 @@ import io.github.libxposed.service.XposedServiceHelper
 /**
  * 模块 UI 与 LSPosed 框架的桥：远程偏好写入、作用域、已注入进程查询。
  *
- * 不用热重载（实测无效且会让 system_server 重启）：远程偏好是两侧共享的，
- * 保存后钩子侧最多 800ms 就自行读到新配置。
+ * 远程偏好两侧共享：保存后钩子侧最多 800ms 自行读到新配置。
  */
 object LspBridge {
 
@@ -35,9 +34,9 @@ object LspBridge {
         runCatching { service?.getRemotePreferences(Config.PREFS_GROUP) }.getOrNull()
 
     /**
-     * 把曲线配置下推给钩子侧（框架侧只读；钩子每次调用都会节流重读，1 秒内自动生效）。
+     * 把曲线配置下推给钩子侧（框架侧只读，钩子每次调用节流重读）。
      *
-     * 不含 `spline`：nit 样条只给界面「换算预览」用，钩子侧现在是纯码值空间（滑条→背光 1:1）。
+     * 不含 `spline`：nit 样条只供界面「换算预览」使用。
      */
     fun pushConfig(
         service: XposedService?,

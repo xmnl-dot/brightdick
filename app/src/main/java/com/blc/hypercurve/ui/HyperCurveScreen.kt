@@ -68,7 +68,7 @@ fun HyperCurveScreen() {
         val scopePackages = LspBridge.scopeOf(s)
         val unknown = scopePackages.isEmpty()
         inScope = unknown || scopePackages.any { it == "system" || it == "android" }
-        // 本机实测滑条→背光的换算在 SystemUI，缺了它曲线不会生效
+        // 滑条→背光的换算在 SystemUI，缺了它曲线不会生效
         sysUiInScope = unknown || scopePackages.any { it == "com.android.systemui" }
         framework = runCatching {
             if (s == null) "未连接 LSPosed" else "${s.frameworkName} ${s.frameworkVersion}（API ${s.apiVersion}）"
@@ -347,7 +347,7 @@ private fun PreviewCard(parsed: List<CurveMath.CurvePoint>?, splineText: String,
                 )
             }
             Text(
-                "实时命中可用 adb logcat -s HyperCurve 查看。",
+                "想看每次命中：打开「详细日志」再拖，然后 adb logcat -s HyperCurve。",
                 style = MaterialTheme.typography.bodySmall,
             )
         }
